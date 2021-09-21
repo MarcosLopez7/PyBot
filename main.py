@@ -17,7 +17,7 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    await message.channel.send("Hola has enviado un mensaje")
+    await message.channel.send("Sola has enviado un mensaje")
 
 
 client.run(TOKEN)
