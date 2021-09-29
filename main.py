@@ -38,6 +38,16 @@ def query_especial_channel(type_channel):
     return result
 
 
+def query_default_role():
+    cursor = conn.cursor()
+
+    cursor.execute("""SELECT id FROM Roles WHERE is_default""")
+
+    result = cursor.fetchall()
+
+    return result
+
+
 def set_cmd(cmd, message):
     if is_admin_member(message.author):
         cursor = conn.cursor()
@@ -82,6 +92,15 @@ async def on_member_join(member):
 
     channel = member.guild.get_channel(int(result[0]))
 
+    cursor.execute("""SELECT role_id FROM Roles WHERE is_default""")
+    result = cursor.fetchone()
+    role = member.guild.get_role(int(result[0]))
+
+    # ('id', x.id), ('name', x.name)
+    # for x in YourChildModel.objects.all()
+
+    await member.add_roles(role)
+
     await channel.send(f"Bienvenido al canal {member.mention}")
 
 
@@ -89,6 +108,30 @@ async def on_member_join(member):
 async def on_message(message):
     if message.content.startswith("$") and len(message.content.split(" ")) == 1:
         await message.channel.send(set_cmd(message.content, message))
+    elif message.content.startswith("$") and len(message.role_mentions) == 1:
+        if is_admin_member(message.author):
+            result = query_default_role()
+            role = message.role_mentions[0]
+            cursor = conn.cursor()
+            if not result:
+                query = """
+                            INSERT INTO Roles (name,is_default,role_id) VALUES (%s,%s,%s)
+                        """
+                parameters = (role.name, True, role.id)
+            else:
+                query = """
+                                            UPDATE Roles 
+                                            SET name = %s,
+                                            role_id = %s
+                                            WHERE id = %s
+                        """
+                parameters = (role.name, role.id, result[0][0])
+
+            cursor.execute(query, parameters)
+
+            conn.commit()
+
+            await message.channel.send(f"Role {role.name} has been set as default role")
 
 
 client.run(TOKEN)
