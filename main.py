@@ -14,6 +14,60 @@ db_manager = DBManager()
 conn = db_manager.get_conn()
 
 
+def is_admin_member(member):
+    roles = member.roles
+
+    for role in roles:
+        if role.permissions.administrator:
+            return True
+
+    return False
+
+
+def query_especial_channel(type_channel):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                            SELECT id FROM EspecialChannel WHERE type = %s
+                            """,
+                   (type_channel,)
+                   )
+
+    result = cursor.fetchall()
+
+    return result
+
+
+def set_cmd(cmd, message):
+    if is_admin_member(message.author):
+        cursor = conn.cursor()
+        type_channel = 'welcome' if cmd == '$set_welcome_channel' else 'rule'
+        result = query_especial_channel(type_channel)
+
+        if not result:
+            query = """
+                                INSERT INTO EspecialChannel (guild_id,channel_id,type,name) VALUES (
+                                    %s,%s,%s,%s
+                                    )
+                                """
+            parameters = (message.guild.id, message.channel.id, type_channel, message.channel.name)
+        else:
+            query = """
+                    UPDATE EspecialChannel
+                    SET guild_id = %s,
+                        channel_id = %s,
+                        name = %s
+                    WHERE
+                        id = %s
+                """
+            parameters = (message.guild.id, message.channel.id, message.channel.name, result[0][0])
+
+        cursor.execute(query, parameters)
+        conn.commit()
+
+        return f"Channel has been set as {type_channel} channel"
+
+
 @client.event
 async def on_ready():
     print(f'{client.user} has connected to Discord!')
@@ -33,85 +87,8 @@ async def on_member_join(member):
 
 @client.event
 async def on_message(message):
-    if message.content == '$set_welcome_channel':
-        roles = message.author.roles
+    if message.content.startswith("$") and len(message.content.split(" ")) == 1:
+        await message.channel.send(set_cmd(message.content, message))
 
-        for role in roles:
-            if role.permissions.administrator:
-                cursor = conn.cursor()
-
-                cursor.execute("""
-                    SELECT * FROM EspecialChannel WHERE type = %s
-                    """,
-                    ('welcome',)
-                )
-
-                result = cursor.fetchall()
-
-                if not result:
-                    cursor.execute("""
-                        INSERT INTO EspecialChannel (guild_id,channel_id,type,name) VALUES (
-                            %s,%s,%s,%s
-                        )
-                    """, (message.guild.id, message.channel.id, 'welcome', message.channel.name))
-
-                    conn.commit()
-                else:
-                    id_especial_channel = result[0][0]
-
-                    cursor.execute("""
-                        UPDATE EspecialChannel
-                        SET guild_id = %s,
-                            channel_id = %s,
-                            name = %s
-                        WHERE
-                            id = %s
-                    """, (message.guild.id, message.channel.id, message.channel.name, id_especial_channel))
-
-                    conn.commit()
-
-                await message.channel.send("Channel has been set as welcome channel")
-                break
-
-    elif message.content == '$set_rule_channel':
-        roles = message.author.roles
-
-        for role in roles:
-            if role.permissions.administrator:
-                cursor = conn.cursor()
-
-                cursor.execute("""
-                                    SELECT * FROM EspecialChannel WHERE type = %s
-                                    """,
-                               ('rule',)
-                               )
-
-                result = cursor.fetchall()
-
-                if not result:
-                    cursor.execute("""
-                                            INSERT INTO EspecialChannel (guild_id,channel_id,type,name) VALUES (
-                                                %s,%s,%s,%s
-                                            )
-                                        """, (message.guild.id, message.channel.id, 'rule', message.channel.name))
-
-                    conn.commit()
-                else:
-                    id_especial_channel = result[0][0]
-
-                    cursor.execute("""
-                                            UPDATE EspecialChannel
-                                            SET guild_id = %s,
-                                                channel_id = %s,
-                                                name = %s
-                                            WHERE
-                                                id = %s
-                                        """,
-                                   (message.guild.id, message.channel.id, message.channel.name, id_especial_channel))
-
-                    conn.commit()
-
-                    await message.channel.send("Channel has been set as rule channel")
-                    break
 
 client.run(TOKEN)
