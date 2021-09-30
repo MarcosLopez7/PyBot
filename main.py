@@ -1,6 +1,8 @@
-import os, re
+import os,re
 import pandas as pd
 import discord
+
+from sqlalchemy import create_engine
 
 from DBManager import DBManager
 
@@ -14,7 +16,36 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 db_manager = DBManager()
 conn = db_manager.get_conn()
 
+engine = create_engine(f'postgresql+psycopg2://{os.getenv("POSTGRES_USER")}:{os.getenv("POSTGRES_PASSWORD")}@localhost:5432/{os.getenv("POSTGRES_DB")}')
+
 bad_words_df = pd.read_csv('bad_words.csv')
+
+
+def check_if_user_ban(member):
+    cursor = conn.cursor()
+
+    sql_query = pd.read_sql_query('''
+                                   SELECT point FROM Reports WHERE discord_user_id = %s
+                                   ''', con=engine, params=(str(member.guild.id),))
+
+    reports_df = pd.DataFrame(sql_query, columns=['point'])
+
+    print(reports_df)
+
+
+def report_user_by_bad_words(member):
+    cursor = conn.cursor()
+
+    query = """
+        INSERT INTO Reports (discord_user_id, title, description, point, guild_id) VALUES (%s,%s,%s,%s,%s)
+    """
+
+    parameters = (member.id, "Bad Word Use", "Bad Word Use", 1, str(member.guild.id))
+
+    cursor.execute(query, parameters)
+    conn.commit()
+
+    # check_if_user_ban(member)
 
 
 def has_text_bad_words(text):
@@ -142,6 +173,7 @@ async def on_message(message):
     else:
         if has_text_bad_words(message.content.lower()):
             await message.delete()
+            report_user_by_bad_words(message.author)
             await message.channel.send("Oye, esto tiene una mala palabra, ten mas cuidado")
 
 client.run(TOKEN)
