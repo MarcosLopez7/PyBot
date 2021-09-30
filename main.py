@@ -24,13 +24,15 @@ bad_words_df = pd.read_csv('bad_words.csv')
 def check_if_user_ban(member):
     cursor = conn.cursor()
 
-    sql_query = pd.read_sql_query('''
-                                   SELECT point FROM Reports WHERE discord_user_id = %s
-                                   ''', con=engine, params=(str(member.guild.id),))
+    query = """
+           SELECT SUM(point) FROM Reports WHERE discord_user_id = %s
+        """
 
-    reports_df = pd.DataFrame(sql_query, columns=['point'])
+    cursor.execute(query, (str(member.id),))
 
-    print(reports_df)
+    result = cursor.fetchone()
+
+    return result[0] >= 10
 
 
 def report_user_by_bad_words(member):
@@ -175,5 +177,7 @@ async def on_message(message):
             await message.delete()
             report_user_by_bad_words(message.author)
             await message.channel.send("Oye, esto tiene una mala palabra, ten mas cuidado")
+            if check_if_user_ban(message.author):
+                await message.author.ban()
 
 client.run(TOKEN)
