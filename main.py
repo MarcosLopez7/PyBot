@@ -1,4 +1,5 @@
-import os
+import os, re
+import pandas as pd
 import discord
 
 from DBManager import DBManager
@@ -12,6 +13,15 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 
 db_manager = DBManager()
 conn = db_manager.get_conn()
+
+bad_words_df = pd.read_csv('bad_words.csv')
+
+
+def has_text_bad_words(text):
+    result = bad_words_df['word'].apply(
+        lambda word: True if re.search(f'(\\W|^){word.lower()}(\\W|$)', text) else False
+    )
+    return sum(result) > 0
 
 
 def is_admin_member(member):
@@ -96,9 +106,6 @@ async def on_member_join(member):
     result = cursor.fetchone()
     role = member.guild.get_role(int(result[0]))
 
-    # ('id', x.id), ('name', x.name)
-    # for x in YourChildModel.objects.all()
-
     await member.add_roles(role)
 
     await channel.send(f"Bienvenido al canal {member.mention}")
@@ -132,6 +139,9 @@ async def on_message(message):
             conn.commit()
 
             await message.channel.send(f"Role {role.name} has been set as default role")
-
+    else:
+        if has_text_bad_words(message.content.lower()):
+            await message.delete()
+            await message.channel.send("Oye, esto tiene una mala palabra, ten mas cuidado")
 
 client.run(TOKEN)
